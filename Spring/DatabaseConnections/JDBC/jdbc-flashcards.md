@@ -31,6 +31,8 @@ A: URL, username, password
 
 A: jdbc:mysql://localhost:3306/db_name
 
+B: jdbc:oracle:thin:@//localhost:1521/db_name
+
 </details>
 
 
