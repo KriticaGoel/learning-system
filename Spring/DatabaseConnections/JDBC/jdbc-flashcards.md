@@ -2,6 +2,14 @@
 
 ---
 
+- Connection → DataSource
+- PreparedStatement → safe SQL
+- executeQuery → SELECT
+- executeUpdate → CUD
+- ResultSet → data
+- Problem → boilerplate
+
+---
 ## 🔹 Basics & Setup
 
 <details>
@@ -26,12 +34,7 @@ A: jdbc:mysql://localhost:3306/db_name
 </details>
 
 
-- Connection → DataSource
-- PreparedStatement → safe SQL
-- executeQuery → SELECT
-- executeUpdate → CUD
-- ResultSet → data
-- Problem → boilerplate
+
 
 ---
 
