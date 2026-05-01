@@ -1,3 +1,13 @@
+## Agenda
+1. READ (single)
+2. READ (List) to POJO
+3. READ (List) to column-value pairs
+4. Create
+5. Update
+6. Delete
+7. Batch Updates
+8. Executing Arbitrary
+
 ### Implementation JdbcTemplate
 
 It removes:
@@ -61,7 +71,10 @@ public Users findById(String id) {
 
 }
 ```
---READ (List)  -> query
+```java
+int count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
+```
+--READ (List)  -> query -> map rows to POJOs or handle custom logic using a RowMapper
 ```java
  public List<Users> findAll(){
         String sql ="Select * from Users";
@@ -76,6 +89,11 @@ public Users findById(String id) {
 
         return jdbcTemplate.query(sql,new Object[]{},rowMapper);
     }
+```
+
+--READ (List)  -> queryFoList -> multiple rows, but each row is a map of column-value pairs
+```java
+List<Map<String, Object>> rows = jdbcTemplate.queryForList("SELECT * FROM users");
 ```
 
 --Create -> update()
@@ -94,7 +112,7 @@ public int updateUser(String name, String email){
     }
 ```
 
--Delete -> update()
+-- Delete -> update()
 ```java
  public int deleteUser(String name){
         String sql="Delete fromUsers where ucase(name)=?";
@@ -102,3 +120,9 @@ public int updateUser(String name, String email){
 
     }
 ```
+
+-- Batch Updates -> batchUpdate()
+
+
+
+--Executing Arbitrary SQL (e.g., DDL)
