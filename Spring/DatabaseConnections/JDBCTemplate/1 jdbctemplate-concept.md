@@ -10,6 +10,27 @@
 
 ### Implementation JdbcTemplate
 
+--Read JDBCTemplate
+
+                                  SQL (String)
+                                       +
+                             Params (Object[] / Named)
+                                       +
+                          RowMapper (Result → Object)
+                                       ↓
+                                 JdbcTemplate
+                   ↓                                    ↓                               ↓
+    queryForObject(sql,parmas,rowmap)    queryForList(sql,parmas,rowmap)   query(sql,parmas,rowmap)
+      single                                   Multiple                           Multiple
+
+-- Create/Update/Delete
+
+                                    SQL (String)    
+                                         ↓
+                                    JdbcTemplate
+                                         ↓
+                                    update(SQL, params)
+
 It removes:
 
 * manual connection handling
