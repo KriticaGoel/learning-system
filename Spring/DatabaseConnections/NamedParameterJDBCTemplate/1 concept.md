@@ -502,6 +502,80 @@ List<Integer> addressIds = namedParameterJdbcTemplate.queryForList(mappingSql,Ma
     }
 ```
 
+#### Dynamic Query
+
+Search users with optional filters:
+- name
+- email
+- city
+- country
+
+👉 Filters may be null / optional
+```java
+public List<Users> searchUsers(String name, String email, String city, String country) {
+
+    StringBuilder sql = new StringBuilder("""
+        SELECT u.user_id, u.name, u.email,
+               a.address_id, a.city, a.country
+        FROM users u
+        LEFT JOIN useraddress ua ON u.user_id = ua.user_id
+        LEFT JOIN address a ON ua.address_id = a.address_id
+        WHERE 1=1
+    """);
+
+    MapSqlParameterSource params = new MapSqlParameterSource();
+
+    if (name != null && !name.isBlank()) {
+        sql.append(" AND u.name = :name");
+        params.addValue("name", name);
+    }
+
+    if (email != null && !email.isBlank()) {
+        sql.append(" AND u.email = :email");
+        params.addValue("email", email);
+    }
+
+    if (city != null && !city.isBlank()) {
+        sql.append(" AND a.city = :city");
+        params.addValue("city", city);
+    }
+
+    if (country != null && !country.isBlank()) {
+        sql.append(" AND a.country = :country");
+        params.addValue("country", country);
+    }
+
+    return jdbc.query(sql.toString(), params, new UserAddressExtractor());
+}
+```
+🧠 🔥 Advanced Patterns (Production Level)
+
+✅ 1. LIKE search
+```
+sql.append(" AND u.name LIKE :name");
+params.addValue("name", "%" + name + "%");
+```
+✅ 2. IN clause
+```
+sql.append(" AND u.user_id IN (:ids)");
+params.addValue("ids", List.of(1,2,3));
+```
+✅ 3. Dynamic Sorting
+```
+if (sortBy != null) {
+sql.append(" ORDER BY ").append(sortBy); // ⚠️ validate input
+}
+```
+
+👉 Never bind column name as parameter ❗
+
+✅ 4. Pagination
+```
+sql.append(" LIMIT :limit OFFSET :offset");
+params.addValue("limit", limit);
+params.addValue("offset", offset);
+```
+
 
 
 
