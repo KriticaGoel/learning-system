@@ -6,10 +6,10 @@
 5. [Read Multiple Row](#read-multiple-rows)
 6. [Update Row](#update-row)
 7. [Delete Row](#delete-row)
-8. Nested Create
-9. Nested Read 
-10. Nested Update
-11. Nested Delete
+8. [Nested Create M:M](#insert-mm)
+9. [Nested Read  M:M](#read-mm)
+10. [Nested Update M:M](#update-mm)
+11. [Nested Delete M:M](#delete-mm)
 12. Dynamic Query (Very Powerful)
 
 ### Implementation NamedParameterJdbcTemplate
@@ -180,21 +180,332 @@ public int updateUserByName(UserRequest user){
     }
 ```
 
-### Nested tables --Insert
+### Nested tables 
 
-    User (1)
-       ↓
-    Insert → user_id generated
-    
-    Addresses (many)
-       ↓
-    Insert each → address_id generated
-    
-    Mapping table
-       ↓
-    (user_id, address_id)
+#### 🧠 Insert (M:M)
 
-SqlParameterSource for nested objects with NamedParameterJdbcTemplate.
+         DTO (Input Layer)
+      ┌─────────────────────┐
+      │ UserDTO             │
+      │  └─ List<AddressDTO>│
+      | AddressDTO          |  
+      └─────────┬───────────┘
+                ↓
+        Convert → Model
+                ↓
+      ┌─────────────────────┐
+      │ Users               │
+      │  └─ List<Address>   │
+      │ Address             │
+      └─────────┬───────────┘
+                ↓
+        ParameterSource Layer
+                ↓
+    ┌─────────────────────────────┐
+    │ CustomSQl parameterSource   |
+    | (MapSqlParameterSource)     │
+    └───────────┬─────────────────┘
+                ↓
+        Repository Layer
+                ↓
+    ┌─────────────────────────────┐
+    │ NamedParameterJdbcTemplate  │
+    └─────────┬─────────┬─────────┘
+              │         │
+       Insert User   Insert Address
+              │         │
+         KeyHolder   KeyHolder
+              │         │
+              └─────┬───┘
+                    ↓
+        Insert Mapping Table
+        (user_id, address_id)
 
-DTO Nested
+MapSqlParameterSource for nested objects with NamedParameterJdbcTemplate.
+
+
+DTO
+```java
+public class AddressDTO {
+
+    private String city;
+    private String country;
+}
+public class UserDTO {
+
+    private String name;
+    private String email;
+    private List<AddressDTO> address;
+}
+```
+
+Models
+```java
+@Component
+public class Users {
+
+    private Integer id;
+    private String name;
+    private String email;
+    private List<Address> address;
+}
+
+public class Address {
+
+    private Integer addressId;
+    private String city;
+    private String country;
+}
+```
+MapSqlParameterSource
+
+```java
+public class UserCustomSqlParameterSource extends MapSqlParameterSource {
+
+    public UserCustomSqlParameterSource(Users user){
+        addValue("name",user.getName());
+        addValue("email",user.getEmail());
+    }
+}
+public class AddressCustomSqlParameterSource extends MapSqlParameterSource {
+
+    public AddressCustomSqlParameterSource(Address address){
+        addValue("city",address.getCity());
+        addValue("country",address.getCountry());
+    }
+}
+public class UserAddressCustomSqlParameterSource extends MapSqlParameterSource {
+
+    public UserAddressCustomSqlParameterSource(Integer userId, Integer addressId){
+
+        addValue("userId",userId);
+        addValue("addressId",addressId);
+    }
+}
+```
+Repository
+```java
+@Transactional
+    public int createUserAddressUsingMapSqlParameterSource(Users user){
+
+        //get user id
+        KeyHolder userKey = new GeneratedKeyHolder();
+        //insert user
+        String userSql = "Insert into users (name,email) values (:name,:email)";
+        namedParameterJdbcTemplate.update(userSql,new UserCustomSqlParameterSource(user),userKey, new String[]{"id"});
+
+        //userKey contain user id to export the value in a variable
+        Integer userId= userKey.getKey().intValue();
+
+        //Insert Address
+        for(Address address : user.getAddress()){
+
+            KeyHolder addressKey = new GeneratedKeyHolder();
+            String addressSql ="insert into address (city,country) values(:city,:country)";
+            namedParameterJdbcTemplate.update(addressSql,new AddressCustomSqlParameterSource(address),addressKey,new String[]{"address_id"});
+
+            //address key contain address id
+            Integer addressId = addressKey.getKey().intValue();
+
+            //insert into mapping table
+            String userAddressMappingSql ="insert into useraddress (user_id,address_id) values(:userId,:addressId)";
+            namedParameterJdbcTemplate.update(userAddressMappingSql,new UserAddrressCustomSqlParameterSource(userId,addressId));
+
+        }
+        return userId;
+    }
+```
+
+#### 🧠 Read M:M
+Use JOIN + ResultSetExtractor
+
+✅ Single query (no N+1)
+
+✅ Full control
+
+✅ Best performance
+
+Sql+ Params -> Map
+```java
+ public List<Users> getUsersWithAddress(Integer userId) {
+        String sql="select u.id,u.name,u.email,a.address_id,a.city,a.country from users u " +
+                "left join useraddress ua on ua.user_id=u.id " +
+                "left join address a on a.address_id=ua.address_id where u.id=:userId";
+        Map<String,Object> params= Map.of("userId",userId);
+
+        return namedParameterJdbcTemplate.query(sql,params,new UsersResultSetExtractor());
+    }
+```
+ResultSetExtractor - custom class
+```java
+public class UsersResultSetExtractor implements ResultSetExtractor<List<Users>> {
+
+    @Override
+    public List<Users> extractData(ResultSet rs) throws SQLException {
+
+        Map<Integer,Users> map= new HashMap<>();
+
+        if(rs!=null){
+            while(rs.next()){
+                int userId=rs.getInt("id");
+                Users user=map.get(userId);
+                if(user==null){
+                    user= new Users();
+                    user.setId(userId);
+                    user.setName(rs.getString("name"));
+                    user.setEmail(rs.getString("email"));
+                    user.setAddress(new ArrayList<Address>());
+                    map.put(userId,user);
+                }
+                int addressId= rs.getInt("address_id");//may be 0 that means data in db is null
+                if(!rs.wasNull()){
+                    Address address= new Address();
+                    address.setAddressId(addressId);
+                    address.setCity(rs.getString("city"));
+                    address.setCountry(rs.getString("country"));
+                    user.getAddress().add(address);
+
+                }
+
+            }
+            return new ArrayList<Users>(map.values());
+        }
+
+        return null;
+    }
+```
+
+#### 🔄 Update M:M
+
+Delete + Reinsert mapping
+
+
+    Update user attributes
+         ↓
+    Update existing address attributes
+         ↓
+    Delete old mappings
+         ↓
+    Insert new addresses (if needed)
+         ↓
+    Insert mappings
+
+Delete old mapping-
+
+Before update:
+User 1 → [Address 10, Address 11]
+
+After update (UI sends):
+User 1 → [Address 11, Address 12]
+
+Best way is to delete all mapping(10,11) and insert new mapping(11,12)
+
+USER table      → attributes update
+ADDRESS table   → attributes update
+MAPPING table   → delete + reinsert
+
+
+```java
+@Transactional
+public int updateUserComplete(Users users) {
+    //  Update user attributes
+    String userSql="update users set name=:name,email =:email where id=:userId";
+    int rowAffected= namedParameterJdbcTemplate.update(userSql,new UserCustomSqlParameterSource(users).addValue("userId",users.getId()));
+
+    if(rowAffected==0){
+        System.out.println("user not found");
+    }else {
+        if (users.getAddress() != null && !users.getAddress().isEmpty()) {
+            //Update existing address attributes
+            for (Address address : users.getAddress()) {
+                if (address.getAddressId() != null) {
+                    String addressSql = "update address set city=:city , country=:country where address_id=:addressId";
+                    namedParameterJdbcTemplate.update(addressSql, new AddressCustomSqlParameterSource(address).addValue("addressId", address.getAddressId()));
+                } else {
+                    //Insert new addresses (if needed)
+                    KeyHolder addressKey = new GeneratedKeyHolder();
+                    String addressSql = "Insert into address (city,country) values(:city,:country)";
+                    namedParameterJdbcTemplate.update(addressSql, new AddressCustomSqlParameterSource(address), addressKey, new String[]{"address_id"});
+
+                    int addressId = addressKey.getKey().intValue();
+                    address.setAddressId(addressId);
+                }
+            }
+            //Delete old mappings
+            String mappingDelete = "delete from useraddress where user_id=:userId";
+            namedParameterJdbcTemplate.update(mappingDelete, Map.of("userId", users.getId()));
+
+
+            //Insert mappings
+            for (Address address : users.getAddress()) {
+                String mappingInsert = "insert into useraddress (user_id,address_id) values(:userId,:addressId)";
+                namedParameterJdbcTemplate.update(mappingInsert, new UserAddressCustomSqlParameterSource(users.getId(), address.getAddressId()));
+            }
+        }
+    }
+    return 0;
+}
+```
+
+
+User not found ≠ user should be created
+
+👉 silently create new user → data corruption
+#### 🗑️ Delete M:M
+
+🟢 Case A: Delete ONE address from a user
+```java
+@Transactional
+    public int deleteAddress(int addressId){
+        String sql="Delete from useraddress where address_id=:addressId";
+        namedParameterJdbcTemplate.update(sql,Map.of("addressId",addressId));
+
+        String addressSql ="Delete from address where address_id=:addressId";
+        return namedParameterJdbcTemplate.update(addressSql,Map.of("addressId",addressId));
+    }
+```
+🟢 Case B: Delete ALL addresses of a user
+```java
+@Transactional
+    public int deleteAllAddress(int userId){
+        String mappingSql="select address_id from useraddress where user_id=:userId";
+        List<Integer> addressIds = namedParameterJdbcTemplate.queryForList(mappingSql,Map.of("userId",userId),Integer.class);
+
+        String sql="Delete from useraddress where user_id=:userId";
+        namedParameterJdbcTemplate.update(sql,Map.of("userId",userId));
+
+        for(Integer addressId: addressIds){
+            String addressSql ="Delete from address where address_id=:addressId";
+            namedParameterJdbcTemplate.update(addressSql,Map.of("addressId",addressId));
+        }
+return addressIds.size();
+    }
+```
+🔴 Case C: Delete USER completely
+```java
+@Transactional
+public int deleteUser(int userId){
+String mappingSql="select address_id from useraddress where user_id=:userId";
+List<Integer> addressIds = namedParameterJdbcTemplate.queryForList(mappingSql,Map.of("userId",userId),Integer.class);
+
+        String sql="Delete from useraddress where user_id=:userId";
+        namedParameterJdbcTemplate.update(sql,Map.of("userId",userId));
+
+        for(Integer addressId: addressIds){
+            String addressSql ="Delete from address where address_id=:addressId";
+            namedParameterJdbcTemplate.update(addressSql,Map.of("addressId",addressId));
+        }
+
+        String userSql="Delete from users where user_id=:userId";
+        return namedParameterJdbcTemplate.update(sql,Map.of("userId",userId));
+
+    }
+```
+
+
+
+
+
+
+
 
