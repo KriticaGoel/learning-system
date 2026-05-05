@@ -6,11 +6,11 @@
 5. [Read Multiple Row](#read-multiple-rows)
 6. [Update Row](#update-row)
 7. [Delete Row](#delete-row)
-8. [Nested Create M:M](#insert-mm)
-9. [Nested Read  M:M](#read-mm)
-10. [Nested Update M:M](#update-mm)
-11. [Nested Delete M:M](#delete-mm)
-12. Dynamic Query (Very Powerful)
+8. [Nested Create M:M](#-insert-mm)
+9. [Nested Read  M:M](#-read-mm)
+10. [Nested Update M:M](#-update-mm)
+11. [Nested Delete M:M](#-delete-mm)
+12. [Dynamic Query (Very Powerful)](#dynamic-query)
 
 ### Implementation NamedParameterJdbcTemplate
 
