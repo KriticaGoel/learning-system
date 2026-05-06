@@ -1,12 +1,11 @@
 ### Agenda
 
-* [Configuration](#configuration)
+* [Configuration](#database-configuration)
 * [Annotation](#annotations)
 * [spring.jpa.hibernate.ddl](#springjpahibernateddl)
 * [GenerateType](#generatetype)
 * [Repository](#repository)
-* [Customised Method in JPA](#customised-method-in-jpa)
-* [Custom Query in JPA](#custom-query-in-jpa)
+* [JPA methods](#jpa-methods)
 * [Relations](#relations)
     * [one-to-one mapping](#one-to-one)
     * [one-to-many mapping](#One-to-Many)
